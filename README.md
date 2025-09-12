@@ -36,3 +36,5 @@ Additionally it provides feedback from Unreal Engine for basic variables. For ex
 Feel free to submit any pull request or help each other out in the issues section of this GitHub. At the moment the module does everything I need it to do, but will expand upon it when needed for projects. 
 
 
+### Acknowledgement
+ChatGPT was partly used to make this module. 
