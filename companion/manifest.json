@@ -1,0 +1,34 @@
+{
+	"id": "unreal-rc-ws",
+	"name": "unreal-rc-ws",
+	"shortname": "unreal-rc-ws",
+	"description": "Unreal Engine Remote Control Websocket",
+	"version": "0.0.1",
+	"license": "MIT",
+	"repository": "https://github.com/gjverhoeff/companion-module-unreal-rc-ws",
+	"bugs": "https://github.com/gjverhoeff/companion-module-unreal-rc-ws/issues",
+	"maintainers": [
+		
+		{
+			"name": "Geert Verhoeff",
+			"email": "info@geertverhoeff.com"
+		}
+	],
+	"legacyIds": [],
+	"runtime": {
+		"type": "node18",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../main.js"
+	},
+	"manufacturer": "Unreal Engine",
+	"products": [
+		"Remote Control Websocket"
+	],
+	"keywords": [
+		"Protocol",
+		"Unreal Engine",
+		"Remote Control",
+		"Websocket"
+	]
+}
