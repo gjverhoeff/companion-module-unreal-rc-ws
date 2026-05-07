@@ -298,6 +298,11 @@ export async function initActions(instance) {
 						)
 					}
 				}
+
+				// Functions may change property values without sending PresetFieldsChanged events,
+				// so clear the stale bool cache and force a fresh feedback evaluation.
+				instance.lastBoolValues.clear()
+				instance._scheduleFeedbackKickDebounced(150)
 			},
 		}
 	}
