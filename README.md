@@ -10,7 +10,9 @@ When opening Companion click the cogwheel in the right top to set developer modu
 ## Usage
 The module provides simple actions for functions and property changes that can be done in **active** Remote Control presets. This means that the module is most likely of use when using Motion Design. 
 
-Additionally it provides feedback from Unreal Engine for basic variables. For example you can 
+In module settings you can enable automatic reconnect and define the reconnect interval in milliseconds. The default interval is **5000 ms**.
+
+To reduce load and avoid freezes during rapid trigger bursts, feedback checks are currently disabled in this build.
 
 **Current Actions**
 - Every function will be added as a separate action including the possibility to change basic parameters (string, bool, float, int, enum, name, text)
@@ -24,13 +26,7 @@ Additionally it provides feedback from Unreal Engine for basic variables. For ex
 - **Set Text** to change exposed FText
 
 **Current Feedback**
-- **Boolean Property Value** to use boolean value in Unreal to change style of Companion button
-- **Enum equals** to change style of Companion button based on enum value
-- **Float Treshold** to use float value as feedback
-- **Integer Treshold** to use integer value as feedback
-- **Name equals** to compare to given value
-- **String equals** to compare to given value
-- **Text equals** to compare to given value
+- Feedback definitions are disabled (no periodic or automatic property-read checks).
 
 ### Help
 Feel free to submit any pull request or help each other out in the issues section of this GitHub. At the moment the module does everything I need it to do, but will expand upon it when needed for projects. 

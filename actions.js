@@ -31,7 +31,6 @@ export async function initActions(instance) {
 					choices: [
 						{ id: 'true', label: 'True' },
 						{ id: 'false', label: 'False' },
-						{ id: 'toggle', label: 'Toggle' },
 					],
 					minChoicesForSearch: 1,
 				},
@@ -46,10 +45,7 @@ export async function initActions(instance) {
 				if (!preset || !property) return
 
 				const mode = action.options.value
-				if (mode === 'toggle') {
-					const current = !!(await instance._getValueViaPreset(preset, property))
-					await instance._setPropertyViaPreset(preset, property, !current)
-				} else if (mode === 'true') {
+				if (mode === 'true') {
 					await instance._setPropertyViaPreset(preset, property, true)
 				} else if (mode === 'false') {
 					await instance._setPropertyViaPreset(preset, property, false)
@@ -299,10 +295,8 @@ export async function initActions(instance) {
 					}
 				}
 
-				// Functions may change property values without sending PresetFieldsChanged events,
-				// so clear the stale bool cache and force a fresh feedback evaluation.
+				// Keep cache maintenance only; feedback polling/checks are disabled.
 				instance.lastBoolValues.clear()
-				instance._scheduleFeedbackKickDebounced(150)
 			},
 		}
 	}

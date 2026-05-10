@@ -3,7 +3,6 @@ import WebSocket from 'ws'
 import objectPath from 'object-path'
 import { upgradeScripts } from './upgrade.js'
 import { initActions } from './actions.js'
-import { initFeedbacks } from './feedback.js'
 
 class WebsocketInstance extends InstanceBase {
 	isInitialized = false
@@ -29,6 +28,7 @@ class WebsocketInstance extends InstanceBase {
 
 	async init(config) {
 		this.config = config
+		this.isInitialized = true
 		this._clearCaches()
 		await this._resetWebSocket()
 
@@ -44,15 +44,12 @@ class WebsocketInstance extends InstanceBase {
 			} catch (err) {
 				this.log('error', `WebSocket connection error: ${err}`)
 				this.updateStatus(InstanceStatus.BadConfig, 'WebSocket connection failed')
+				this.maybeReconnect()
 			}
 		}
 
-		this.isInitialized = true
 		this.updateVariables()
 		await initActions(this)
-		initFeedbacks(this)
-		this.subscribeFeedbacks?.()
-		this._startFeedbackPolling()
 	}
 
 	getConfigFields() {
@@ -69,9 +66,18 @@ class WebsocketInstance extends InstanceBase {
 				type: 'checkbox',
 				id: 'reconnect',
 				label: 'Reconnect',
-				tooltip: 'Reconnect on error (5s)',
+				tooltip: 'Reconnect automatically when disconnected',
 				width: 6,
 				default: true,
+			},
+			{
+				type: 'number',
+				id: 'reconnect_interval_ms',
+				label: 'Reconnect interval (ms)',
+				tooltip: 'How long to wait before each reconnect attempt.',
+				width: 6,
+				default: 5000,
+				min: 250,
 			},
 			{
 				type: 'checkbox',
@@ -90,23 +96,6 @@ class WebsocketInstance extends InstanceBase {
 				required: true,
 			},
 			{ type: 'number', id: 'port', label: 'Unreal Engine WebSocket Port', default: 30020, width: 6, required: true },
-			{
-				type: 'checkbox',
-				id: 'feedback_polling',
-				label: 'Feedback polling fallback',
-				tooltip: 'Periodically re-check feedbacks in case events are missed.',
-				width: 6,
-				default: true,
-			},
-			{
-				type: 'number',
-				id: 'feedback_poll_ms',
-				label: 'Polling interval (ms)',
-				tooltip: 'How often to re-evaluate feedbacks when polling is enabled.',
-				width: 6,
-				default: 1000,
-				min: 250,
-			},
 		]
 	}
 
@@ -116,7 +105,6 @@ class WebsocketInstance extends InstanceBase {
 			clearTimeout(this.reconnect_timer)
 			this.reconnect_timer = null
 		}
-		this._stopFeedbackPolling()
 		try {
 			for (const p of this.presets) await this._unregisterPreset(p)
 		} catch {}
@@ -134,9 +122,9 @@ class WebsocketInstance extends InstanceBase {
 		this.config = config
 
 		const addrChanged = oldconfig['ip'] !== config['ip'] || oldconfig['port'] !== config['port']
-		const pollChanged =
-			oldconfig['feedback_polling'] !== config['feedback_polling'] ||
-			Number(oldconfig['feedback_poll_ms']) !== Number(config['feedback_poll_ms'])
+		const reconnectChanged =
+			oldconfig['reconnect'] !== config['reconnect'] ||
+			Number(oldconfig['reconnect_interval_ms']) !== Number(config['reconnect_interval_ms'])
 
 		if (addrChanged) {
 			await this._resetWebSocket()
@@ -152,16 +140,21 @@ class WebsocketInstance extends InstanceBase {
 						this.setConfigFields(this.getConfigFields())
 					}
 					await initActions(this)
-					initFeedbacks(this)
 				} catch (err) {
 					this.log('error', `WebSocket connection error: ${err}`)
 					this.updateStatus(InstanceStatus.BadConfig, 'WebSocket connection failed')
+					this.maybeReconnect()
 				}
 			}
 		}
 
-		if (pollChanged) {
-			this._startFeedbackPolling()
+		if (reconnectChanged) {
+			if (!this.config.reconnect && this.reconnect_timer) {
+				clearTimeout(this.reconnect_timer)
+				this.reconnect_timer = null
+			} else if (this.config.reconnect && (!this.ws || this.ws.readyState !== 1)) {
+				this.maybeReconnect()
+			}
 		}
 	}
 
@@ -179,6 +172,11 @@ class WebsocketInstance extends InstanceBase {
 	}
 
 	async _resetWebSocket() {
+		if (this.reconnect_timer) {
+			clearTimeout(this.reconnect_timer)
+			this.reconnect_timer = null
+		}
+
 		while (this._httpQueue.length) {
 			const item = this._httpQueue.shift()
 			try {
@@ -195,15 +193,22 @@ class WebsocketInstance extends InstanceBase {
 		}
 	}
 
+	_getReconnectDelayMs() {
+		const configured = Number(this.config?.reconnect_interval_ms)
+		if (!Number.isFinite(configured)) return 5000
+		return Math.max(250, Math.round(configured))
+	}
+
 	maybeReconnect() {
 		if (this.isInitialized && this.config.reconnect) {
 			if (this.reconnect_timer) clearTimeout(this.reconnect_timer)
+			const delay = this._getReconnectDelayMs()
 			this.reconnect_timer = setTimeout(() => {
 				this.connectWebSocket().catch((e) => {
 					this.log('error', `Reconnect failed: ${e}`)
 					this.maybeReconnect()
 				})
-			}, 5000)
+			}, delay)
 		}
 	}
 
@@ -292,48 +297,6 @@ class WebsocketInstance extends InstanceBase {
 		return await p
 	}
 
-	_kickAllFeedbacks() {
-		try {
-			this.checkFeedbacks?.('boolean_property_value')
-			this.checkFeedbacks?.('float_threshold')
-			this.checkFeedbacks?.('int_threshold')
-			this.checkFeedbacks?.('string_equals')
-			this.checkFeedbacks?.('text_equals')
-			this.checkFeedbacks?.('name_equals')
-			this.checkFeedbacks?.('enum_equals')
-		} catch (e) {
-			this.log('debug', `_kickAllFeedbacks error: ${e?.message || e}`)
-		}
-	}
-
-	_scheduleFeedbackKickDebounced(delay = 60) {
-		try {
-			if (this.__kickTimer) clearTimeout(this.__kickTimer)
-			this.__kickTimer = setTimeout(() => {
-				this.__kickTimer = null
-				this._kickAllFeedbacks()
-			}, delay)
-		} catch {}
-	}
-
-	_startFeedbackPolling() {
-		this._stopFeedbackPolling()
-		if (this.config?.feedback_polling) {
-			const ms = Math.max(250, Number(this.config?.feedback_poll_ms || 1000))
-			this.__pollTimer = setInterval(() => this._kickAllFeedbacks(), ms)
-			this.log('info', `Feedback polling enabled (${ms} ms)`)
-		} else {
-			this.log('info', `Feedback polling disabled`)
-		}
-	}
-
-	_stopFeedbackPolling() {
-		if (this.__pollTimer) {
-			clearInterval(this.__pollTimer)
-			this.__pollTimer = null
-		}
-	}
-
 	_onWsMessage(frame) {
 		try {
 			if (frame instanceof Buffer) frame = frame.toString()
@@ -345,7 +308,6 @@ class WebsocketInstance extends InstanceBase {
 					clearTimeout(item?.timer)
 				} catch {}
 				item?.resolve?.(msg)
-				this._scheduleFeedbackKickDebounced()
 				return
 			}
 
@@ -371,13 +333,6 @@ class WebsocketInstance extends InstanceBase {
 							this.lastBoolValues.get(preset).set(label, b)
 						}
 					}
-					this.checkFeedbacks?.('boolean_property_value')
-					this.checkFeedbacks?.('float_threshold')
-					this.checkFeedbacks?.('int_threshold')
-					this.checkFeedbacks?.('string_equals')
-					this.checkFeedbacks?.('text_equals')
-					this.checkFeedbacks?.('name_equals')
-					this.checkFeedbacks?.('enum_equals')
 				} else if (
 					msg.Type === 'PresetFieldsAdded' ||
 					msg.Type === 'PresetFieldsRemoved' ||
@@ -388,7 +343,6 @@ class WebsocketInstance extends InstanceBase {
 						this.refreshCatalogs().catch((e) => this.log('error', `Catalog refresh error: ${e?.message || e}`))
 					}, 200)
 				}
-				this._scheduleFeedbackKickDebounced()
 			}
 
 			this.subscriptions.forEach((subscription) => {
@@ -477,7 +431,6 @@ class WebsocketInstance extends InstanceBase {
 		}
 
 		await initActions(this)
-		initFeedbacks(this)
 		await this.ensurePresetSubscriptions()
 	}
 
