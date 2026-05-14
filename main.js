@@ -418,8 +418,10 @@ class WebsocketInstance extends InstanceBase {
 
 					const funcs = g?.ExposedFunctions || []
 					for (const fn of funcs) {
-						const label = fn?.DisplayName
-						if (!label) continue
+						// Trim and reject explicitly-bad values so that empty strings or stringified
+						// 'undefined' coming from the wire don't slip through and surface in the UI.
+						const label = String(fn?.DisplayName ?? '').trim()
+						if (!label || label.toLowerCase() === 'undefined') continue
 						const argsRaw = fn?.UnderlyingFunction?.Arguments || []
 						const args = argsRaw.map((a) => this._mapArgDescriptor(a))
 						this.functions.push({ preset, label, args })
