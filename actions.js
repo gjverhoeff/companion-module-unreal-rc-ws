@@ -231,8 +231,13 @@ export async function initActions(instance) {
 				useVariables: true,
 			})
 		}
+		// Name uses `${preset}: ${label}` so Companion's alphabetical ordering naturally groups
+		// actions of the same preset — Companion has no real category support for actions, so
+		// a sortable prefix is the closest to grouping we can get in the UI.
+		const argSummary = fn.args.length > 0 ? fn.args.map((a) => a.name).join(', ') : 'none'
 		defs[actionId] = {
-			name: `Call Function • ${fn.preset} • ${fn.label}`,
+			name: `${fn.preset}: ${fn.label}`,
+			description: `Call function "${fn.label}" on preset "${fn.preset}". Args: ${argSummary}.`,
 			options,
 			callback: async (action, context) => {
 				const parameters = {}
