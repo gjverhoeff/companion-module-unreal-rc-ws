@@ -1,8 +1,8 @@
 {
 	"id": "unreal-rc-ws",
-	"name": "unreal-rc-ws",
-	"shortname": "unreal-rc-ws",
-	"description": "Unreal Engine Remote Control Websocket",
+	"name": "Unreal Engine Remote Control (WebSocket)",
+	"shortname": "Unreal_RC",
+	"description": "Unreal Engine Remote Control over WebSocket — auto-discovers preset properties and exposed functions.",
 	"version": "0.0.1",
 	"license": "MIT",
 	"repository": "https://github.com/gjverhoeff/companion-module-unreal-rc-ws",
